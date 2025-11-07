@@ -1,0 +1,29 @@
+schemaVersion: 2.2.0
+attributes:
+  controller.devfile.io/storage-type: per-workspace
+metadata:
+  name: nested-containers-dev-spaces
+projects:
+  - name: ocp-4-20-user-namespaces
+    git:
+      remotes:
+        origin: https://github.com/cgruver/ocp-4-20-user-namespaces.git
+      checkoutFrom:
+        remote: origin
+        revision: main
+components:
+- name: dev-tools
+  container: 
+    image: quay.io/cgruver0/che/ocp-4-20-userns:latest
+    memoryLimit: 8Gi
+    cpuLimit: "2"
+    env:
+    - name: HOME
+      value: "/projects/home"
+    - name: VSCODE_DEFAULT_WORKSPACE
+      value: "/projects/ocp-4-20-user-namespaces/vscode.code-workspace"
+    endpoints:
+    - exposure: public
+      name: podman
+      protocol: https
+      targetPort: 8080
