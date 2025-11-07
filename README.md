@@ -1,5 +1,7 @@
 # User Namespaces Enabled in OCP 4.20
 
+Watch the video here: [https://youtu.be/fX_IzmR2hkE](https://youtu.be/fX_IzmR2hkE)
+
 OpenShift 4.20 includes support for kernel level user namespaces!
 
 Why is this important?
@@ -18,7 +20,11 @@ Let's explore.
 
 This git repo includes a `devfile.yaml` that enables you to launch a Dev Spaces workspace.  If you want to try it out, first visit this link to set up Dev Spaces in your cluster: [https://github.com/cgruver/ocp-4-20-nested-containers](https://github.com/cgruver/ocp-4-20-nested-containers)
 
-# Run a container inside a container.
+__Note:__ The container image used for this demo can be found in the `workspace-image` folder of this repo.
+
+## Run a container inside a container in a Pod.
+
+Create a SecurityContextConstraint that allows container-in-container:
 
 ```bash
 cat << EOF | oc apply -f -
@@ -52,9 +58,13 @@ userNamespaceLevel: RequirePodLevel
 EOF
 ```
 
+Create an OpenShift Project
+
 ```bash
 oc new-project userns-test
 ```
+
+Create a Pod
 
 ```bash
 cat << EOF | oc apply -f -
@@ -94,29 +104,47 @@ spec:
 EOF
 ```
 
+Open a shell into the Pod
+
 ```bash
 oc rsh container-in-container
 ```
+
+Note that your UID is 1000 inside the Pod
 
 ```bash
 id
 ```
 
+Pull a container image
+
 ```bash
 podman pull quay.io/libpod/banner
 ```
+
+Run a container with the image
 
 ```bash
 podman run -d --rm --name webserver -p 8080:80 quay.io/libpod/banner
 ```
 
+Curl the Nginx endpoint in the running container
+
 ```bash
 curl http://localhost:8080
 ```
 
+Open a shell into the container
+
 ```bash
 podman exec -it webserver /bin/sh 
 ```
+
+When done, delete the Pod
+
+## Run a Pod as root
+
+Create another SecurityContextConstraint
 
 ```bash
 cat << EOF | oc apply -f -
@@ -139,6 +167,8 @@ supplementalGroups:
 userNamespaceLevel: RequirePodLevel
 EOF
 ```
+
+Create a Pod that runs as root inside the Pod
 
 ```bash
 cat << EOF | oc apply -f -
