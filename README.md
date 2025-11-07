@@ -114,6 +114,9 @@ podman run -d --rm --name webserver -p 8080:80 quay.io/libpod/banner
 curl http://localhost:8080
 ```
 
+```bash
+podman exec -it webserver /bin/sh 
+```
 
 ```bash
 cat << EOF | oc apply -f -
