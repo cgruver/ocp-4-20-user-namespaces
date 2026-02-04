@@ -154,6 +154,9 @@ metadata:
   name: run-as-root
 priority: null
 allowPrivilegeEscalation: true
+allowedCapabilities:
+- SETUID
+- SETGID
 fsGroup:
   type: RunAsAny
 runAsUser:

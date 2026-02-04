@@ -27,3 +27,9 @@ components:
       name: podman
       protocol: https
       targetPort: 8080
+# - name: systemd
+#   container:
+#     image: registry.access.redhat.com/ubi10-init:10.1
+#     sourceMapping: /projects
+#     memoryLimit: 8Gi
+#     cpuLimit: "2"
