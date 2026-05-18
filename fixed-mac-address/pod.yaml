@@ -1,0 +1,33 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: fixed-mac-addr
+  annotations:
+    openshift.io/scc: user-namespace-net-admin
+spec:
+  hostUsers: false
+  restartPolicy: Always
+  containers:
+    - resources:
+        limits:
+          cpu: "1"
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      name: fixed-mac-addr
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
+            - SETUID
+            - SETGID
+          drop:
+            - ALL
+        runAsUser: 1000
+        runAsNonRoot: true
+        readOnlyRootFilesystem: false
+        allowPrivilegeEscalation: true
+        procMount: Unmasked
+      imagePullPolicy: Always
+      image: 'quay.io/cgruver0/che/fixed-mac-test:latest'
