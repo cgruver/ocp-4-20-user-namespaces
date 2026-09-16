@@ -18,8 +18,6 @@ components:
     memoryLimit: 8Gi
     cpuLimit: "2"
     env:
-    - name: HOME
-      value: "/projects/home"
     - name: VSCODE_DEFAULT_WORKSPACE
       value: "/projects/ocp-4-20-user-namespaces/vscode.code-workspace"
     endpoints:
