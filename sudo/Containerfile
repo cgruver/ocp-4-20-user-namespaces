@@ -1,0 +1,22 @@
+FROM registry.access.redhat.com/ubi10-minimal
+
+ENV HOME=/home/user
+ENV BUILDAH_ISOLATION=chroot
+
+COPY --chown=0:0 entrypoint.sh /
+
+RUN microdnf --disableplugin=subscription-manager install -y procps-ng iproute sudo shadow-utils bash util-linux vim-minimal vim-enhanced ; \
+    microdnf update -y ; \
+    microdnf clean all ; \
+    chmod +x /entrypoint.sh ; \
+    groupadd -g 1000 user ; \
+    useradd -u 1000 -g 1000 -d ${HOME} -s /bin/bash user  ; \
+    usermod -L user ; \
+    chmod 400 /etc/shadow ; \
+    chown -R user ${HOME} ; \
+    echo "user ALL=NOPASSWD: /usr/sbin/ip link set dev eth0 *" > /etc/sudoers.d/user-netadmin ; \
+    chmod 0440 /etc/sudoers.d/user-netadmin
+
+USER 1000
+ENTRYPOINT ["/entrypoint.sh"]
+CMD [ "tail", "-f", "/dev/null" ]

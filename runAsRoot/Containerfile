@@ -1,0 +1,16 @@
+FROM registry.access.redhat.com/ubi10-minimal
+
+ENV HOME=${USER_HOME_DIR}
+ENV BUILDAH_ISOLATION=chroot
+
+USER 0
+
+COPY --chown=0:0 useless-job.sh /
+
+RUN microdnf --disableplugin=subscription-manager install -y procps-ng openssl git tar shadow-utils bash util-linux vim-minimal vim-enhanced ; \
+    microdnf update -y ; \
+    microdnf clean all ; \
+    chmod +x /useless-job.sh
+    
+USER 0
+ENTRYPOINT ["/useless-job.sh"]

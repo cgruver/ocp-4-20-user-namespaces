@@ -22,6 +22,82 @@ This git repo includes a `devfile.yaml` that enables you to launch a Dev Spaces 
 
 __Note:__ The container image used for this demo can be found in the `workspace-image` folder of this repo.
 
+# Running a Pod with a fixed UID using User Namespaces
+
+Log in as a cluster administrator
+
+```bash
+oc login -u=admin $(oc whoami --show-server)
+podman login -u $(oc whoami) -p $(oc whoami -t) image-registry.openshift-image-registry.svc:5000
+```
+
+Create an OpenShift Project
+
+```bash
+oc new-project userns-test
+```
+
+Create an SCC that ensures Pods run as UID 375
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: uid-375
+priority: null
+fsGroup:
+  type: MustRunAs
+  uid: 375
+runAsUser:
+  type: MustRunAs
+  uid: 375
+seLinuxContext:
+  type: MustRunAs
+userNamespaceLevel: RequirePodLevel
+EOF
+```
+
+Build the image
+
+```bash
+podman build -t image-registry.openshift-image-registry.svc:5000/userns-test/uid-375:latest ./fixedId
+podman push image-registry.openshift-image-registry.svc:5000/userns-test/uid-375:latest
+```
+
+Create a Pod
+
+```bash
+cat << EOF | oc apply -f -
+kind: Pod
+apiVersion: v1
+metadata:
+  name: uid-375
+  namespace: userns-test
+  annotations:
+    openshift.io/scc: uid-375
+spec:
+  hostUsers: false
+  restartPolicy: Always
+  containers:
+    - resources:
+        limits:
+          cpu: "1"
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      name: uid-375
+      securityContext:
+        capabilities:
+          drop:
+            - ALL
+        runAsUser: 375
+      imagePullPolicy: Always
+      image: 'image-registry.openshift-image-registry.svc:5000/userns-test/uid-375:latest'
+EOF
+```
+
 ## Run a container inside a container in a Pod.
 
 Create a SecurityContextConstraint that allows container-in-container:
@@ -39,9 +115,7 @@ allowedCapabilities:
 - SETGID
 fsGroup:
   type: MustRunAs
-  ranges:
-  - min: 1000
-    max: 65534
+  uid: 1000
 runAsUser:
   type: MustRunAs
   uid: 1000
@@ -49,19 +123,15 @@ seLinuxContext:
   type: MustRunAs
   seLinuxOptions:
     type: container_engine_t
-supplementalGroups:
-  type: MustRunAs
-  ranges:
-  - min: 1000
-    max: 65534
 userNamespaceLevel: RequirePodLevel
 EOF
 ```
 
-Create an OpenShift Project
+Build the image
 
 ```bash
-oc new-project userns-test
+podman build -t image-registry.openshift-image-registry.svc:5000/userns-test/container-in-container:latest ./nested-containers
+podman push image-registry.openshift-image-registry.svc:5000/userns-test/container-in-container:latest
 ```
 
 Create a Pod
@@ -72,6 +142,7 @@ kind: Pod
 apiVersion: v1
 metadata:
   name: container-in-container
+  namespace: userns-test
   annotations:
     io.kubernetes.cri-o.Devices: '/dev/fuse,/dev/net/tun'
     openshift.io/scc: container-in-container
@@ -95,12 +166,10 @@ spec:
           drop:
             - ALL
         runAsUser: 1000
-        runAsNonRoot: true
-        readOnlyRootFilesystem: false
         allowPrivilegeEscalation: true
         procMount: Unmasked
       imagePullPolicy: Always
-      image: 'quay.io/cgruver0/che/ocp-4-20-userns:latest'
+      image: 'image-registry.openshift-image-registry.svc:5000/userns-test/container-in-container:latest'
 EOF
 ```
 
@@ -153,19 +222,21 @@ kind: SecurityContextConstraints
 metadata:
   name: run-as-root
 priority: null
-allowPrivilegeEscalation: true
 fsGroup:
   type: RunAsAny
 runAsUser:
   type: RunAsAny
 seLinuxContext:
   type: MustRunAs
-  seLinuxOptions:
-    type: container_engine_t
-supplementalGroups:
-  type: RunAsAny
 userNamespaceLevel: RequirePodLevel
 EOF
+```
+
+Build the image
+
+```bash
+podman build -t image-registry.openshift-image-registry.svc:5000/userns-test/run-as-root:latest ./runAsRoot
+podman push image-registry.openshift-image-registry.svc:5000/userns-test/run-as-root:latest
 ```
 
 Create a Pod that runs as root inside the Pod
@@ -176,8 +247,8 @@ kind: Pod
 apiVersion: v1
 metadata:
   name: run-as-root
+  namespace: userns-test
   annotations:
-    io.kubernetes.cri-o.Devices: '/dev/fuse,/dev/net/tun'
     openshift.io/scc: run-as-root
 spec:
   hostUsers: false
@@ -196,22 +267,89 @@ spec:
           drop:
             - ALL
         runAsUser: 0
-        readOnlyRootFilesystem: false
-        allowPrivilegeEscalation: true
-        procMount: Unmasked
       imagePullPolicy: Always
-      image: 'quay.io/cgruver0/che/ocp-4-20-userns:latest'
+      image: 'image-registry.openshift-image-registry.svc:5000/userns-test/run-as-root:latest'
 EOF
 ```
 
-## Run a Pod with a fixed MAC address
+## Enable `sudo` in a Pod - aka Run a Pod with a fixed MAC address
 
-```bash
-oc apply -f fixed-mac-address/scc.yaml
-oc new-project fixed-mac-test
-oc apply -f fixed-mac-address/pod.yaml
-```
-
-Note: The details of the container image are in `fixed-mac-address/Containerfile` and `fixed-mac-address/entrypoint.sh`
+Create another SecurityContextConstraint
 
 The SCC enables CAP_NET_ADMIN for manipulating the network device, and CAP_SETUID/CAP_SETGID for sudo.
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: user-namespace-net-admin
+priority: null
+allowPrivilegeEscalation: true
+allowedCapabilities:
+- SETUID
+- SETGID
+- NET_ADMIN
+fsGroup:
+  type: MustRunAs
+  ranges:
+  - min: 1000
+    max: 65534
+runAsUser:
+  type: MustRunAs
+  uid: 1000
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+  - min: 1000
+    max: 65534
+userNamespaceLevel: RequirePodLevel
+EOF
+```
+
+Build the image
+
+```bash
+podman build -t image-registry.openshift-image-registry.svc:5000/userns-test/set-mac:latest ./sudo
+podman push image-registry.openshift-image-registry.svc:5000/userns-test/set-mac:latest
+```
+
+Create a Pod
+
+```bash
+cat << EOF | oc apply -f -
+kind: Pod
+apiVersion: v1
+metadata:
+  name: fixed-mac-addr
+  namespace: userns-test
+  annotations:
+    openshift.io/scc: user-namespace-net-admin
+spec:
+  hostUsers: false
+  restartPolicy: Always
+  containers:
+    - resources:
+        limits:
+          cpu: "1"
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      name: fixed-mac-addr
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
+            - SETUID
+            - SETGID
+          drop:
+            - ALL
+        runAsUser: 1000
+        allowPrivilegeEscalation: true
+      imagePullPolicy: Always
+      image: 'image-registry.openshift-image-registry.svc:5000/userns-test/set-mac:latest'
+EOF
+```

@@ -16,8 +16,6 @@ RUN microdnf --disableplugin=subscription-manager install -y procps-ng openssl g
     ##
     ## Setup for root-less podman
     ##
-    # Create the User's home directory
-    mkdir -p ${USER_HOME_DIR} ; \
     #
     # Add the user to /etc/passwd and /etc/group
     # Add the user with the UID that the SCC will enforce
