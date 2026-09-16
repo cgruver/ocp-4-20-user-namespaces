@@ -25,3 +25,29 @@ components:
       name: podman
       protocol: https
       targetPort: 8080
+- name: prep-workspace
+  container:
+    args:
+      - '-c'
+      - >-
+        mkdir -p /projects/.bin && cp /usr/bin/oc /projects/.bin/oc && cp /usr/bin/kubectl /projects/.bin/kubectl 
+    command:
+      - /bin/bash
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+    mountSources: true
+    sourceMapping: /projects
+    memoryRequest: 128Mi
+    memoryLimit: 256Mi
+    cpuRequest: 10m
+    cpuLimit: 200m
+    env:
+    - name: HOME
+      value: "/projects"
+commands:
+- apply:
+    component: prep-workspace
+    label: Pre Start Prep
+  id: prep-workspace
+events:
+  preStart:
+    - prep-workspace
