@@ -459,6 +459,7 @@ metadata:
   namespace: userns-test
   annotations:
     io.kubernetes.cri-o.Devices: '/dev/fuse,/dev/net/tun'
+    io.kubernetes.cri-o.cgroup2-mount-hierarchy-rw: 'true'
     openshift.io/scc: cic-systemd
 spec:
   hostUsers: false
@@ -477,6 +478,7 @@ spec:
           add:
             - SETGID
             - SETUID
+            - CHOWN
           drop:
             - ALL
         runAsUser: 1000
@@ -496,7 +498,7 @@ oc rsh cic-systemd
 Build the test image to run Nginx as a systemd service.
 
 ```bash
-podman build -t nginx:init ./test-image
+podman build -t nginx:init -f Containerfile.nginx /test-image
 ```
 
 Run the container image:

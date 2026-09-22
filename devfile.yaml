@@ -14,7 +14,7 @@ projects:
 components:
 - name: dev-tools
   container: 
-    image: quay.io/cgruver0/che/ocp-4-20-userns:latest
+    image: image-registry.openshift-image-registry.svc:5000/cekit-images/ops-tools:latest
     memoryLimit: 8Gi
     cpuLimit: "2"
     env:

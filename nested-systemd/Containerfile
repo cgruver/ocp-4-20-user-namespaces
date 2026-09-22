@@ -10,11 +10,12 @@ COPY --chown=0:0 entrypoint.sh /
 COPY --chown=0:0 set-cgroups.sh /
 COPY --chown=0:0 Containerfile.nginx /test-image/Containerfile.nginx
 
-RUN microdnf --disableplugin=subscription-manager install -y procps-ng openssl git tar shadow-utils bash zsh podman buildah skopeo python3-pip python3-devel aardvark-dns fuse-overlayfs util-linux vim-minimal vim-enhanced ; \
+RUN microdnf --disableplugin=subscription-manager install -y procps-ng openssl git tar shadow-utils bash zsh podman buildah skopeo python3-pip python3-devel aardvark-dns fuse-overlayfs util-linux vim-minimal vim-enhanced sudo; \
     microdnf update -y ; \
     microdnf clean all ; \
     pip3 install podman-compose ; \
     chmod +x /entrypoint.sh ; \
+    chmod +x /set-cgroups.sh ; \
     ##
     ## Setup for root-less podman
     ##
