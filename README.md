@@ -353,3 +353,159 @@ spec:
       image: 'image-registry.openshift-image-registry.svc:5000/userns-test/set-mac:latest'
 EOF
 ```
+
+## Advanced Use Case - Run a nested systemd enabled container.  (Useful for molecule testing in Ansible)
+
+This use case isn't for everyone.  It will require you to make a node configuration change to your OCP cluster.
+
+1. Create a MachineConfig to enable read/write cgroupfs in the crun configuration:
+
+__Note:__ For this step you need to install Butane: [https://coreos.github.io/butane/](https://coreos.github.io/butane/)
+
+Set env vars:
+
+```bash
+# Set one of:
+
+# For Control-Plane nodes -
+MACHINE_TYPE=master
+
+# For Compute Nodes -
+MACHINE_TYPE=worker
+```
+
+```bash
+OCP_VER=<YOUR CLUSTER MAJOR and MINOR VERSION (No Patch version)> # For example OCP_VER=4.22.0
+```
+
+```bash
+cat << EOF | butane | oc apply -f -
+variant: openshift
+version: ${OCP_VER}
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: ${MACHINE_TYPE}
+  name: enable-rw-cgroup-${MACHINE_TYPE}
+storage:
+  files:
+  - path: /etc/crio/crio.conf.d/99-cic-systemd
+    mode: 0644
+    overwrite: true
+    contents:
+      inline: |
+        [crio.runtime.runtimes.crun]
+        runtime_root = "/run/crun"
+        allowed_annotations = [
+          "io.containers.trace-syscall",
+          "io.kubernetes.cri-o.Devices",
+          "io.kubernetes.cri-o.LinkLogs",
+          "io.kubernetes.cri-o.cgroup2-mount-hierarchy-rw",
+        ]
+EOF
+```
+
+All of the nodes will perform a rolling restart as the MachineConfig is applied.
+
+1. Create a SecurityContextConstraint that allows container-in-container plus `CAP_CHOWN`:
+
+chown is needed to set permissions on a new cgroupfs inside the Pod.
+
+```bash
+cat << EOF | oc apply -f -
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: cic-systemd
+priority: null
+allowPrivilegeEscalation: true
+allowedCapabilities:
+- SETUID
+- SETGID
+- CHOWN
+fsGroup:
+  type: MustRunAs
+  uid: 1000
+runAsUser:
+  type: MustRunAs
+  uid: 1000
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+  - min: 1000
+    max: 65534
+seLinuxContext:
+  type: MustRunAs
+  seLinuxOptions:
+    type: container_engine_t
+userNamespaceLevel: RequirePodLevel
+EOF
+```
+
+Build the image
+
+```bash
+podman build -t image-registry.openshift-image-registry.svc:5000/userns-test/cic-systemd:latest ./nested-systemd
+podman push image-registry.openshift-image-registry.svc:5000/userns-test/cic-systemd:latest
+```
+
+Create a Pod
+
+```bash
+cat << EOF | oc apply -f -
+kind: Pod
+apiVersion: v1
+metadata:
+  name: cic-systemd
+  namespace: userns-test
+  annotations:
+    io.kubernetes.cri-o.Devices: '/dev/fuse,/dev/net/tun'
+    openshift.io/scc: cic-systemd
+spec:
+  hostUsers: false
+  restartPolicy: Always
+  containers:
+    - resources:
+        limits:
+          cpu: "1"
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      name: cic-systemd
+      securityContext:
+        capabilities:
+          add:
+            - SETGID
+            - SETUID
+          drop:
+            - ALL
+        runAsUser: 1000
+        allowPrivilegeEscalation: true
+        procMount: Unmasked
+      imagePullPolicy: Always
+      image: 'image-registry.openshift-image-registry.svc:5000/userns-test/cic-systemd:latest'
+EOF
+```
+
+Open a shell into the Pod
+
+```bash
+oc rsh cic-systemd
+```
+
+Build the test image to run Nginx as a systemd service.
+
+```bash
+podman build -t nginx:init ./test-image
+```
+
+Run the container image:
+
+```bash
+podman run -d -p 8080:80 --name=nginx nginx:init
+```
+
+```bash
+curl localhost:8080
+```
+

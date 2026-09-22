@@ -1,0 +1,42 @@
+FROM registry.access.redhat.com/ubi10-minimal
+ARG USER_HOME_DIR="/projects"
+
+ENV HOME=${USER_HOME_DIR}
+ENV BUILDAH_ISOLATION=chroot
+
+USER 0
+
+COPY --chown=0:0 entrypoint.sh /
+COPY --chown=0:0 set-cgroups.sh /
+COPY --chown=0:0 Containerfile.nginx /test-image/Containerfile.nginx
+
+RUN microdnf --disableplugin=subscription-manager install -y procps-ng openssl git tar shadow-utils bash zsh podman buildah skopeo python3-pip python3-devel aardvark-dns fuse-overlayfs util-linux vim-minimal vim-enhanced ; \
+    microdnf update -y ; \
+    microdnf clean all ; \
+    pip3 install podman-compose ; \
+    chmod +x /entrypoint.sh ; \
+    ##
+    ## Setup for root-less podman
+    ##
+    #
+    # Add the user to /etc/passwd and /etc/group
+    # Add the user with the UID that the SCC will enforce
+    groupadd -g 1000 user ; \
+    useradd -u 1000 -g 1000 -d ${USER_HOME_DIR} -s /bin/bash user  ; \
+    usermod -L user  ; \
+    chmod 400 /etc/shadow  ; \
+    chown -R 1000:1000 ${USER_HOME_DIR} ; \
+    #
+    # Enable podman to create uid and gid maps for the user
+    chown root:user /etc/subuid /etc/subgid ; \
+    chmod 664 /etc/subuid /etc/subgid ; \
+    setcap cap_setuid+ep /usr/bin/newuidmap ; \
+    setcap cap_setgid+ep /usr/bin/newgidmap ; \
+    echo "user ALL=NOPASSWD: /set-cgroups.sh" >> /etc/sudoers
+
+# The SCC that we are using will ensure that the user runs as UID 1000 in its own user namespace on the host node.
+USER 1000
+WORKDIR ${USER_HOME_DIR}
+# Using catatonit ensures that our running container has a process reaper.  This avoids zombie processes in the container.
+ENTRYPOINT ["/usr/libexec/podman/catatonit","--","/entrypoint.sh"]
+CMD [ "tail", "-f", "/dev/null" ]
