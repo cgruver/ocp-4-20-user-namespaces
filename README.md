@@ -360,7 +360,7 @@ This use case isn't for everyone.  It will require you to make a node configurat
 
 1. Create a MachineConfig to enable read/write cgroupfs in the crun configuration:
 
-__Note:__ For this step you need to install Butane: [https://coreos.github.io/butane/](https://coreos.github.io/butane/)
+__Note:__ For this step you need to install Butane: [https://github.com/coreos/ignition/tree/main/butane](https://github.com/coreos/ignition/tree/main/butane)
 
 Set env vars:
 
